@@ -8,6 +8,7 @@ import torch.distributions as td
 from torchvision import datasets, transforms
 from torchvision.utils import make_grid
 from tqdm import tqdm, trange
+import wandb
 
 def trunc_normal_(tensor, mean=0., std=1., a=-2., b=2.):
     # type: (Tensor, float, float, float, float) -> Tensor
@@ -1193,7 +1194,7 @@ def testNNet(net, test_loader, device='cuda', verbose=True):
     return 1-(correct/total)
 
 
-def trainPNNet(net, optimizer, pbobj, epoch, train_loader, lambda_var=None, optimizer_lambda=None, verbose=False):
+def trainPNNet(net, optimizer, pbobj, epoch, train_loader, lambda_var=None, optimizer_lambda=None, verbose=False, log_wandb=False):
     """Train function for a probabilistic NN (including CNN)
 
     Parameters
@@ -1264,7 +1265,21 @@ def trainPNNet(net, optimizer, pbobj, epoch, train_loader, lambda_var=None, opti
             avgkl_l += kl_l
             avgloss_l += loss_l.item()
             avgerr_l += err_l
-
+    if log_wandb:
+        to_log = {
+            "Epoch" : epoch,
+            "Train obj" : avgbound/batch_id,
+            "KL/n" : avgkl/batch_id,
+            "NLL loss" : avgloss/batch_id,
+            "Train 0-1 Error" : avgerr/batch_id
+        }
+        if pbobj.objective == 'flamb':
+            to_log["afterLambda Train obj"] = avgbound_l/batch_id
+            to_log["afterLambda KL/n"] = avgkl_l/batch_id
+            to_log["afterLambda NLL loss"] = avgloss_l/batch_id
+            to_log["afterLambda Train 0-1 Error"] = avgerr_l/batch_id
+            to_log["afterLambda last lambda value"] = lambda_var.lamb_scaled.item()
+        wandb.log(to_log)
     if verbose:
         # show the average of the metrics during the epoch
         print(
