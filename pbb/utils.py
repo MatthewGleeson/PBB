@@ -16,8 +16,8 @@ import wandb
 def runexp(name_data, objective, prior_type, model, sigma_prior, pmin, learning_rate, momentum, 
 learning_rate_prior=0.01, momentum_prior=0.95, delta=0.025, layers=9, delta_test=0.01, mc_samples=1000, 
 samples_ensemble=100, kl_penalty=1, initial_lamb=6.0, train_epochs=100, prior_dist='gaussian', 
-verbose=False, device='cuda', prior_epochs=20, dropout_prob=0.2, perc_train=1.0, verbose_test=True, 
-perc_prior=0.2, batch_size=250, log_wandb = True, wandb_project_name = "third test project"):
+verbose=False, device='cuda', prior_epochs=20, dropout_prob=0.2, perc_train=1.0, verbose_test=False, 
+perc_prior=0.2, batch_size=250, log_wandb = True, wandb_project_name = "alternate prior experiment"):
 
     """Run an experiment with PAC-Bayes inspired training objectives
 
