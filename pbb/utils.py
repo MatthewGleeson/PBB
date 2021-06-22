@@ -11,12 +11,14 @@ from tqdm import tqdm, trange
 from pbb.models import NNet4l, CNNet4l, ProbNNet4l, ProbCNNet4l, ProbCNNet9l, CNNet9l, CNNet13l, ProbCNNet13l, ProbCNNet15l, CNNet15l, trainNNet, testNNet, Lambda_var, trainPNNet, computeRiskCertificates, testPosteriorMean, testStochastic, testEnsemble
 from pbb.bounds import PBBobj
 from pbb import data
+import wandb
 
 def runexp(name_data, objective, prior_type, model, sigma_prior, pmin, learning_rate, momentum, 
 learning_rate_prior=0.01, momentum_prior=0.95, delta=0.025, layers=9, delta_test=0.01, mc_samples=1000, 
 samples_ensemble=100, kl_penalty=1, initial_lamb=6.0, train_epochs=100, prior_dist='gaussian', 
-verbose=False, device='cuda', prior_epochs=20, dropout_prob=0.2, perc_train=1.0, verbose_test=False, 
-perc_prior=0.2, batch_size=250):
+verbose=False, device='cuda', prior_epochs=20, dropout_prob=0.2, perc_train=1.0, verbose_test=True, 
+perc_prior=0.2, batch_size=250, log_wandb = True, wandb_project_name = "third test project"):
+
     """Run an experiment with PAC-Bayes inspired training objectives
 
     Parameters
@@ -111,6 +113,10 @@ perc_prior=0.2, batch_size=250):
         batch size for experiments
     """
 
+    #log training status with weights & biases
+    if log_wandb:
+        wandb.init(settings=wandb.Settings(start_method="fork"), project=wandb_project_name, config=locals())
+
     # this makes the initialised prior the same for all bounds
     torch.manual_seed(7)
     np.random.seed(0)
@@ -200,9 +206,15 @@ perc_prior=0.2, batch_size=250):
 
     optimizer = optim.SGD(net.parameters(), lr=learning_rate, momentum=momentum)
 
+    if log_wandb:
+        wandb.watch(net, log_freq=100)
     for epoch in trange(train_epochs):
-        trainPNNet(net, optimizer, bound, epoch, train_loader, lambda_var, optimizer_lambda, verbose)
+        if log_wandb:
+            wandb.log({"test alert":"True"})
+        trainPNNet(net, optimizer, bound, epoch, train_loader, lambda_var, optimizer_lambda, verbose, log_wandb)
         if verbose_test and ((epoch+1) % 5 == 0):
+            if log_wandb:
+                wandb.log({"entered logging if statement": "True"})
             train_obj, risk_ce, risk_01, kl, loss_ce_train, loss_01_train = computeRiskCertificates(net, toolarge,
             bound, device=device, lambda_var=lambda_var, train_loader=val_bound, whole_train=val_bound_one_batch)
 
@@ -213,7 +225,8 @@ perc_prior=0.2, batch_size=250):
             print(f"***Checkpoint results***")         
             print(f"Objective, Dataset, Sigma, pmin, LR, momentum, LR_prior, momentum_prior, kl_penalty, dropout, Obj_train, Risk_CE, Risk_01, KL, Train NLL loss, Train 01 error, Stch loss, Stch 01 error, Post mean loss, Post mean 01 error, Ens loss, Ens 01 error, 01 error prior net, perc_train, perc_prior")
             print(f"{objective}, {name_data}, {sigma_prior :.5f}, {pmin :.5f}, {learning_rate :.5f}, {momentum :.5f}, {learning_rate_prior :.5f}, {momentum_prior :.5f}, {kl_penalty : .5f}, {dropout_prob :.5f}, {train_obj :.5f}, {risk_ce :.5f}, {risk_01 :.5f}, {kl :.5f}, {loss_ce_train :.5f}, {loss_01_train :.5f}, {stch_loss :.5f}, {stch_err :.5f}, {post_loss :.5f}, {post_err :.5f}, {ens_loss :.5f}, {ens_err :.5f}, {errornet0 :.5f}, {perc_train :.5f}, {perc_prior :.5f}")
-
+            if log_wandb:
+                wandb.log({"epoch":epoch, "Objective":objective , "Dataset":name_data , "Sigma": sigma_prior , "pmin":pmin , "LR":learning_rate , "momentum":momentum , "LR_prior":learning_rate_prior , "momentum_prior":momentum_prior , "kl_penalty":kl_penalty , "dropout":dropout_prob , "Obj_train":train_obj , "Risk_CE":risk_ce , "Risk_01":risk_01 , "KL":kl , "Train NLL loss":loss_ce_train , "Train 01 error":loss_01_train , "Stch loss":stch_loss , "Stch 01 error":stch_err , "Post mean loss":post_loss , "Post mean 01 error":post_err , "Ens loss":ens_loss , "Ens 01 error":ens_err , "01 error prior net":errornet0 , "perc_train":perc_train , "perc_prior":perc_prior})
     train_obj, risk_ce, risk_01, kl, loss_ce_train, loss_01_train = computeRiskCertificates(net, toolarge, bound, device=device,
     lambda_var=lambda_var, train_loader=val_bound, whole_train=val_bound_one_batch)
 
@@ -224,7 +237,7 @@ perc_prior=0.2, batch_size=250):
     print(f"***Final results***") 
     print(f"Objective, Dataset, Sigma, pmin, LR, momentum, LR_prior, momentum_prior, kl_penalty, dropout, Obj_train, Risk_CE, Risk_01, KL, Train NLL loss, Train 01 error, Stch loss, Stch 01 error, Post mean loss, Post mean 01 error, Ens loss, Ens 01 error, 01 error prior net, perc_train, perc_prior")
     print(f"{objective}, {name_data}, {sigma_prior :.5f}, {pmin :.5f}, {learning_rate :.5f}, {momentum :.5f}, {learning_rate_prior :.5f}, {momentum_prior :.5f}, {kl_penalty : .5f}, {dropout_prob :.5f}, {train_obj :.5f}, {risk_ce :.5f}, {risk_01 :.5f}, {kl :.5f}, {loss_ce_train :.5f}, {loss_01_train :.5f}, {stch_loss :.5f}, {stch_err :.5f}, {post_loss :.5f}, {post_err :.5f}, {ens_loss :.5f}, {ens_err :.5f}, {errornet0 :.5f}, {perc_train :.5f}, {perc_prior :.5f}")
-
+    
 
 def count_parameters(model): 
     return sum(p.numel() for p in model.parameters() if p.requires_grad)
